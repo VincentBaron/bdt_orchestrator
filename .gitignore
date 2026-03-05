@@ -12,3 +12,4 @@ test.json
 .idea/
 .vscode/
 *.log
+/test

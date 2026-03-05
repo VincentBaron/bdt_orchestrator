@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     FLATCHR_API_URL: str
     FLATCHR_TOKEN: str
     FLATCHR_COMPANY_ID: str
-    FLATCHR_API_USER_ID: int
+    FLATCHR_API_USER_ID: str
     FLATCHR_DEFAULT_COLUMN_ID: int
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
