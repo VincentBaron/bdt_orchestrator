@@ -31,7 +31,7 @@ async def ats_job_created_webhook(
     
     logger.info(f"[Webhook ATS] Extracted job_id: {job_id}, slug: {vacancy_slug}")
     
-    # Planifier la synchro Jemmo + Déclenchement de la recherche via le Service ATS
-    background_tasks.add_task(AtsService.trigger_sourcing_sync_and_match, job_id, vacancy_slug, job_title, payload_dict)
+    # Déclenchement de la recherche via le Service ATS
+    background_tasks.add_task(AtsService.trigger_sourcing_search, job_id, vacancy_slug, job_title, payload_dict)
     
     return {"message": "Webhook ATS reçu et traitement en arrière-plan planifié."}

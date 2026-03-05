@@ -15,43 +15,58 @@ class JemmoClient:
         
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
+            "x-api-key": self.api_key,
             "Content-Type": "application/json"
         }
         
-    async def sync_job(self, vacancy_slug: str, job_title: str, ats_payload: Dict[str, Any]) -> str:
-        endpoint = f"{self.base_url}/api/v1/partners/clients/{self.external_id}/sync/jobs"
+    async def create_search(self, vacancy_slug: str, ats_payload: Dict[str, Any]) -> str:
+        endpoint = f"{self.base_url}/api/v1/partners/clients/{self.external_id}/search"
+        
+        vacancy = ats_payload.get("vacancy", {})
+        job_title = vacancy.get("title", "")
+        description = vacancy.get("description", "")
+        
+        address_dict = vacancy.get("address") or {}
+        location = address_dict.get("locality", "")
+        
+        try:
+            salary_min = int(vacancy.get("salary", 0))
+        except (ValueError, TypeError):
+            salary_min = 0
+            
+        try:
+            salary_max = int(vacancy.get("salary_max", 0))
+        except (ValueError, TypeError):
+            salary_max = 0
+            
         payload = {
-            "externalJobId": vacancy_slug,
-            "title": job_title,
-            "rawData": ats_payload
+            "query": "-",
+            "job_id": vacancy_slug,
+            "criteria": {
+                "jobTitle": job_title,
+                "description": description,
+                "location": location,
+                "pricing": {
+                    "min": salary_min,
+                    "max": salary_max
+                }
+            }
         }
-        logger.info(f"[Jemmo] Syncing job {vacancy_slug}...")
+        
+        logger.info(f"[Jemmo] Creating search for job {vacancy_slug}...")
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(endpoint, json=payload, headers=self.headers, timeout=10.0)
                 response.raise_for_status()
-                logger.info(f"[Jemmo] Successfully synced job {vacancy_slug}")
-                return vacancy_slug
+                data = response.json()
+                match_id = data.get("match_id", "")
+                logger.info(f"[Jemmo] Successfully created search for job {vacancy_slug}. Match ID: {match_id}")
+                return match_id
             except httpx.HTTPStatusError as e:
-                logger.error(f"[Jemmo] Sync failed with status {e.response.status_code} : {e.response.text}")
+                logger.error(f"[Jemmo] Search creation failed with status {e.response.status_code} : {e.response.text}")
                 raise
             except Exception as e:
-                logger.error(f"[Jemmo] Error during job sync: {e}")
-                raise
-
-    async def trigger_match(self, vacancy_slug: str) -> None:
-        endpoint = f"{self.base_url}/api/v1/partners/clients/{self.external_id}/jobs/{vacancy_slug}/match"
-        logger.info(f"[Jemmo] Triggering match for job {vacancy_slug}...")
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(endpoint, headers=self.headers, timeout=10.0)
-                response.raise_for_status()
-                logger.info(f"[Jemmo] Successfully triggered match for job {vacancy_slug}")
-            except httpx.HTTPStatusError as e:
-                logger.error(f"[Jemmo] Match trigger failed with status {e.response.status_code} : {e.response.text}")
-                raise
-            except Exception as e:
-                logger.error(f"[Jemmo] Error during match trigger: {e}")
+                logger.error(f"[Jemmo] Error during search creation: {e}")
                 raise
 
     async def get_match_results(self, match_id: str) -> List[Dict[str, Any]]:
