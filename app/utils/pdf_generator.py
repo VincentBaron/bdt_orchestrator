@@ -88,7 +88,7 @@ def generate_candidate_pdf(firstname: str, lastname: str, candidate_data: Dict[s
     story.append(Paragraph(f"Profil : {firstname} {lastname}", title_style))
     
     # LinkedIn / Score
-    score = candidate_data.get("score")
+    score = candidate_data.get("match_score")
     score_text = f"Score Sourcing Jemmo : {score}/100" if score is not None else "Évaluation Jemmo en cours"
     if talent_info.get("linkedin_url"):
          score_text += f" | LinkedIn disponible"

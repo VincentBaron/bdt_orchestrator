@@ -7,7 +7,6 @@ class Settings(BaseSettings):
     # Sourcing API
     SOURCING_API_URL: str
     SOURCING_API_KEY: str
-    SOURCING_CLIENT_EXTERNAL_ID: str
     
     # Flatchr ATS
     FLATCHR_CAREERS_URL: str

@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from app.core.config import settings
 from app.clients.flatchr_client import FlatchrClient
 from app.clients.jemmo_client import JemmoClient
@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 class SourcingService:
     @staticmethod
-    async def process_new_sourced_candidate(candidate_data: Dict[str, Any], original_vacancy_id: str) -> None:
+    async def process_new_sourced_candidate(candidate_data: Dict[str, Any], original_vacancy_id: str, match_id: Optional[str] = None) -> None:
         """
         Méthode Orchestateur pour le Flux 3 : Création directe dans l'offre finale avec la bonne colonne.
         """
@@ -33,6 +33,9 @@ class SourcingService:
             pdf_base64 = None
             pdf_filename = None
             comment_text = "Profil sourcé par Jemmo Sourcing. Erreur lors de la génération du PDF récapitulatif."
+            
+        if match_id:
+            comment_text += f"\n\nfrom Jemmo\nMatch ID: {match_id}"
         
         logger.info(f"[Workflow Flatchr] Beginning ingestion for candidate {firstname} {lastname} directly into vacancy {original_vacancy_id}")
         
@@ -64,7 +67,7 @@ class SourcingService:
             jemmo_client = JemmoClient()
             results = await jemmo_client.get_match_results(match_id)
             
-            candidates = results.get("candidates", [])
+            candidates = results.get("talents", [])
             
             if not candidates:
                 logger.info(f"[Background Sourcing] Aucun candidat retourné pour le match {match_id}")
@@ -77,7 +80,8 @@ class SourcingService:
                     break
                 await SourcingService.process_new_sourced_candidate(
                     candidate_data=candidate,
-                    original_vacancy_id=vacancy_slug
+                    original_vacancy_id=vacancy_slug,
+                    match_id=match_id
                 )
             logger.info(f"[Background Sourcing] Fin de l'injection pour le match {match_id}")
 

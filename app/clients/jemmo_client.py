@@ -10,7 +10,10 @@ class JemmoClient:
     
     def __init__(self):
         self.base_url = settings.SOURCING_API_URL
-        self.external_id = settings.SOURCING_CLIENT_EXTERNAL_ID
+
+
+
+        
         self.api_key = settings.SOURCING_API_KEY
         
         self.headers = {
@@ -26,6 +29,15 @@ class JemmoClient:
         job_title = vacancy.get("title", "")
         description = vacancy.get("description", "")
         
+        # Remove the standard BDT introductory paragraph to avoid false positives in Jemmo search
+        bdt_intro = "🚀 Le Bureau des Talents est spécialisé dans la chasse, l’accompagnement et le coaching des talents pour les startups, les scale-ups et les entreprises à impact."
+        description = description.replace(bdt_intro, "").strip()
+        
+        skills = vacancy.get("skills", "")
+        
+        if skills:
+            description = f"{description}\n\nCompétences cherchées:\n{skills}".strip()
+        
         remote = vacancy.get("remote", "")
         address_dict = vacancy.get("address") or {}
         
@@ -40,7 +52,7 @@ class JemmoClient:
             salary_max = 0
             
         payload = {
-            "query": "-",
+            "job_id": vacancy_slug,
             "criteria": {
                 "jobTitle": job_title,
                 "description": description,
@@ -48,7 +60,8 @@ class JemmoClient:
                     "min": salary_min,
                     "max": salary_max
                 }
-            }
+            },
+            "computeJustifications": True
         }
         if remote in ("notime"):
             payload["criteria"]["location"] = address_dict.get("locality", "")
