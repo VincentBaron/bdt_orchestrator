@@ -14,3 +14,4 @@ test.json
 *.log
 /test
 .agent/*
+setup_fly_secrets.sh

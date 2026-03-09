@@ -8,14 +8,16 @@ logger = logging.getLogger(__name__)
 
 class SourcingService:
     @staticmethod
-    async def process_new_sourced_candidate(candidate_data: Dict[str, Any], original_vacancy_id: str, match_id: Optional[str] = None) -> None:
+    async def process_new_sourced_candidate(candidate_data: Dict[str, Any], original_vacancy_id: str, match_id: Optional[str] = None) -> bool:
         """
         Méthode Orchestateur pour le Flux 3 : Création directe dans l'offre finale avec la bonne colonne.
         """
         if original_vacancy_id is None:
             original_vacancy_id = settings.FLATCHR_TEMP_VACANCY_SLUG
         flatchr_client = FlatchrClient()
-        default_column_id = settings.FLATCHR_DEFAULT_COLUMN_ID
+        
+        source = candidate_data.get("source")
+        target_column_id = 56527 if source == "own_pool" else 56500
         
         # Extraction des données selon le nouveau format Jemmo Sourcing (talents)
         talent_info = candidate_data.get("talent") or {}
@@ -45,7 +47,7 @@ class SourcingService:
             firstname=firstname,
             lastname=lastname,
             linkedin_url=linkedin_url,
-            column_id=default_column_id,
+            column_id=target_column_id,
             comment=comment_text,
             resume_base64=pdf_base64,
             resume_filename=pdf_filename
@@ -53,37 +55,58 @@ class SourcingService:
         
         if not created:
             logger.error(f"[Workflow Flatchr] Aborting workflow for {firstname} {lastname} (Creation failed)")
-            return
+            return False
             
         logger.info(f"[Workflow Flatchr] Workflow completed successfully for {firstname} {lastname}")
+        return True
 
     @staticmethod
     async def fetch_and_process_sourcing_results(match_id: str, vacancy_slug: str):
         """
         Tâche asynchrone déclenchée après un webhook Sourcing pour fetch les résultats Jemmo.
         """
+        # Configuration d'un logger dédié dans un fichier
+        debug_logger = logging.getLogger("sourcing_debug")
+        debug_logger.setLevel(logging.INFO)
+        if not debug_logger.handlers:
+            fh = logging.FileHandler("sourcing_debug.log")
+            fh.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+            debug_logger.addHandler(fh)
+
         logger.info(f"[Background Sourcing] Démarrage de l'analyse des résultats pour match_id={match_id} (slug = {vacancy_slug})")
+        debug_logger.info(f"--- Démarrage process pour match_id={match_id} ---")
         try:
             jemmo_client = JemmoClient()
             results = await jemmo_client.get_match_results(match_id)
             
             candidates = results.get("talents", [])
+            candidates_returned = len(candidates)
+            debug_logger.info(f"1. Talents ressortis du get matchResults (Jemmo) : {candidates_returned}")
             
             if not candidates:
                 logger.info(f"[Background Sourcing] Aucun candidat retourné pour le match {match_id}")
+                debug_logger.info("Fin du process : 0 candidat")
                 return
                 
-            logger.info(f"[Background Sourcing] Succès. {len(candidates)} candidat(s) récupéré(s). Injection dans Flatchr...")
+            logger.info(f"[Background Sourcing] Succès. {candidates_returned} candidat(s) récupéré(s). Injection dans Flatchr...")
             
-            for i, candidate in enumerate(candidates):
-                if i >= 3:
-                    break
-                await SourcingService.process_new_sourced_candidate(
+            api_calls = 0
+            candidates_created = 0
+            
+            for candidate in candidates:
+                api_calls += 1
+                success = await SourcingService.process_new_sourced_candidate(
                     candidate_data=candidate,
                     original_vacancy_id=vacancy_slug,
                     match_id=match_id
                 )
+                if success:
+                    candidates_created += 1
+            
+            debug_logger.info(f"2. Talents créés dans Flatchr avec succès : {candidates_created}")
+            debug_logger.info(f"3. Nombre d'appels à l'API Flatchr (intentions de création) : {api_calls}")
             logger.info(f"[Background Sourcing] Fin de l'injection pour le match {match_id}")
 
         except Exception as e:
             logger.error(f"[Background Sourcing] Erreur lors de la récupération des résultats : {e}", exc_info=True)
+            debug_logger.error(f"Erreur durant le process : {e}")
