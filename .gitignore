@@ -13,3 +13,4 @@ test.json
 .vscode/
 *.log
 /test
+.agent/*

@@ -22,15 +22,15 @@ async def sourcing_events_webhook(
     """
     event_type = payload.event
     
-    logger.info(f"[Webhook Sourcing] Ingestion Event: {event_type} | MatchId: {payload.matchId} | ExternalJobId: {payload.externalJobId}")
+    logger.info(f"[Webhook Sourcing] Ingestion Event: {event_type} | MatchId: {payload.data.match_id} | ExternalJobId: {payload.data.job_id}")
     
     # On ne réagit qu'aux events de complétion du match
     if event_type == "match.completed":
         # Planifier la récupération des résultats via Jemmo API orchestré par SourcingService
         background_tasks.add_task(
             SourcingService.fetch_and_process_sourcing_results,
-            match_id=payload.matchId,
-            vacancy_slug=payload.externalJobId
+            match_id=payload.data.match_id,
+            vacancy_slug=payload.data.job_id
         )
     else:
         logger.info(f"[Webhook Sourcing] Event ignoré : {event_type}")

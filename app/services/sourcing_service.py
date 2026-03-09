@@ -3,7 +3,7 @@ from typing import Dict, Any
 from app.core.config import settings
 from app.clients.flatchr_client import FlatchrClient
 from app.clients.jemmo_client import JemmoClient
-
+from app.utils.pdf_generator import generate_candidate_pdf
 logger = logging.getLogger(__name__)
 
 class SourcingService:
@@ -17,16 +17,22 @@ class SourcingService:
         flatchr_client = FlatchrClient()
         default_column_id = settings.FLATCHR_DEFAULT_COLUMN_ID
         
-        # Extraction des données (à adapter selon le format exact renvoyé par Jemmo Sourcing)
-        firstname = candidate_data.get("firstName", "Unknown")
-        lastname = candidate_data.get("lastName", "Unknown")
-        
-        # Récupération de l'URL LinkedIn (ou première dispo)
-        link_urls = candidate_data.get("link_urls", [])
-        if not hasattr(link_urls, "__iter__") or isinstance(link_urls, str):
-            link_urls = []
-            
-        linkedin_url = link_urls[0] if len(link_urls) > 0 else "https://linkedin.com/in/unknown"
+        # Extraction des données selon le nouveau format Jemmo Sourcing (talents)
+        talent_info = candidate_data.get("talent") or {}
+        firstname = talent_info.get("first_name") or candidate_data.get("firstName", "Unknown")
+        lastname = talent_info.get("last_name") or candidate_data.get("lastName", "Unknown")
+        linkedin_url = talent_info.get("linkedin_url")
+                
+        # Génération du beau PDF récapitulatif
+        try:
+            pdf_base64 = generate_candidate_pdf(firstname, lastname, candidate_data, talent_info)
+            pdf_filename = f"Profil_Jemmo_{firstname}_{lastname}.pdf"
+            comment_text = "Profil sourcé et présélectionné par Jemmo Sourcing. 📄 Toutes les informations d'analyse (Score, Points Forts, Compétences) sont disponibles dans le PDF ci-joint."
+        except Exception as e:
+            logger.error(f"[Workflow Flatchr] Erreur lors de la génération du PDF pour {firstname} {lastname}: {e}")
+            pdf_base64 = None
+            pdf_filename = None
+            comment_text = "Profil sourcé par Jemmo Sourcing. Erreur lors de la génération du PDF récapitulatif."
         
         logger.info(f"[Workflow Flatchr] Beginning ingestion for candidate {firstname} {lastname} directly into vacancy {original_vacancy_id}")
         
@@ -36,7 +42,10 @@ class SourcingService:
             firstname=firstname,
             lastname=lastname,
             linkedin_url=linkedin_url,
-            column_id=default_column_id
+            column_id=default_column_id,
+            comment=comment_text,
+            resume_base64=pdf_base64,
+            resume_filename=pdf_filename
         )
         
         if not created:
@@ -55,7 +64,7 @@ class SourcingService:
             jemmo_client = JemmoClient()
             results = await jemmo_client.get_match_results(match_id)
             
-            candidates = results if isinstance(results, list) else results.get("candidates", [])
+            candidates = results.get("candidates", [])
             
             if not candidates:
                 logger.info(f"[Background Sourcing] Aucun candidat retourné pour le match {match_id}")
@@ -63,12 +72,13 @@ class SourcingService:
                 
             logger.info(f"[Background Sourcing] Succès. {len(candidates)} candidat(s) récupéré(s). Injection dans Flatchr...")
             
-            for candidate in candidates:
+            for i, candidate in enumerate(candidates):
+                if i >= 3:
+                    break
                 await SourcingService.process_new_sourced_candidate(
                     candidate_data=candidate,
                     original_vacancy_id=vacancy_slug
                 )
-                
             logger.info(f"[Background Sourcing] Fin de l'injection pour le match {match_id}")
 
         except Exception as e:

@@ -20,9 +20,13 @@ class FlatchrClient:
             "Content-Type": "application/json"
         }
 
-    async def create_candidate(self, vacancy_slug: str, firstname: str, lastname: str, linkedin_url: str, column_id: Optional[int] = None) -> bool:
+    async def create_candidate(self, vacancy_slug: str, firstname: str, lastname: str, linkedin_url: str, column_id: Optional[int] = None, comment: Optional[str] = None, resume_base64: Optional[str] = None, resume_filename: Optional[str] = None) -> bool:
         endpoint = f"{self.careers_url}/vacancy/candidate/json"
-        dummy_base64_pdf = "JVBERi0xLjQKMSAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PgplbmRvYmoKMiAwIG9iago8PC9UeXBlL1BhZ2VzL0NvdW50IDEvS2lkc1szIDAgUl0+PgplbmRvYmoKMyAwIG9iago8PC9UeXBlL1BhZ2UvTWVkaWFCb3hbMCAwIDU5NSA4NDJdL1BhcmVudCAyIDAgUi9SZXNvdXJjZXM8PC9Gb250PDwvRjEgNCAwIFI+Pj4+L0NvbnRlbnRzIDUgMCBSPj4KZW5kb2JqCjQgMCBvYmoKPDwvVHlwZS9Gb250L1N1YnR5cGUvVHlwZTEvQmFzZUZvbnQvSGVsdmV0aWNhPj4KZW5kb2JqCjUgMCBvYmoKPDwvTGVuZ3RoIDIxPj4Kc3RyZWFtCkJUCjEwIDAgMCAxMCAxMCA1MDAgVG0KKEhlbGxvIFdvcmxkKVRqCkVUCmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDE1IDAwMDAwIG4gCjAwMDAwMDAwNjIgMDAwMDAgbiAKMDAwMDAwMDEyMSAwMDAwMCBuIAowMDAwMDAwMjMwIDAwMDAwIG4gCjAwMDAwMDAzMTggMDAwMDAgbiAKdHJhaWxlcgo8PC9TaXplIDYvUm9vdCAxIDAgUj4+CnN0YXJ0eHJlZgozOTA0CiUlRU9GCg=="
+        
+        # Use provided base64 PDF or default dummy PDF
+        default_dummy_pdf = "JVBERi0xLjQKMSAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PgplbmRvYmoKMiAwIG9iago8PC9UeXBlL1BhZ2VzL0NvdW50IDEvS2lkc1szIDAgUl0+PgplbmRvYmoKMyAwIG9iago8PC9UeXBlL1BhZ2UvTWVkaWFCb3hbMCAwIDU5NSA4NDJdL1BhcmVudCAyIDAgUi9SZXNvdXJjZXM8PC9Gb250PDwvRjEgNCAwIFI+Pj4+L0NvbnRlbnRzIDUgMCBSPj4KZW5kb2JqCjQgMCBvYmoKPDwvVHlwZS9Gb250L1N1YnR5cGUvVHlwZTEvQmFzZUZvbnQvSGVsdmV0aWNhPj4KZW5kb2JqCjUgMCBvYmoKPDwvTGVuZ3RoIDIxPj4Kc3RyZWFtCkJUCjEwIDAgMCAxMCAxMCA1MDAgVG0KKEhlbGxvIFdvcmxkKVRqCkVUCmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDE1IDAwMDAwIG4gCjAwMDAwMDAwNjIgMDAwMDAgbiAKMDAwMDAwMDEyMSAwMDAwMCBuIAowMDAwMDAwMjMwIDAwMDAwIG4gCjAwMDAwMDAzMTggMDAwMDAgbiAKdHJhaWxlcgo8PC9TaXplIDYvUm9vdCAxIDAgUj4+CnN0YXJ0eHJlZgozOTA0CiUlRU9GCg=="
+        final_pdf_data = resume_base64 if resume_base64 else default_dummy_pdf
+        final_filename = resume_filename if resume_filename else f"CV_{firstname}_{lastname}.pdf"
         
         payload = {
             "vacancy": vacancy_slug,
@@ -30,13 +34,18 @@ class FlatchrClient:
             "lastname": lastname,
             "type": "document",
             "resume": {
-                "data": dummy_base64_pdf,
-                "fileName": f"CV_{firstname}_{lastname}.pdf",
+                "data": final_pdf_data,
+                "fileName": final_filename,
                 "contentType": "application/pdf"
             }
         }
         if column_id is not None:
             payload["column_id"] = str(column_id)
+        if comment:
+            payload["comment"] = comment
+        if linkedin_url and linkedin_url != "https://linkedin.com/in/unknown":
+            payload["urls"] = [linkedin_url]
+            
         logger.info(f"[Flatchr] Creating candidate {firstname} {lastname} in vacancy {vacancy_slug}")
         
         # log full request

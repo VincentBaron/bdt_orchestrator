@@ -20,14 +20,14 @@ class JemmoClient:
         }
         
     async def create_search(self, vacancy_slug: str, ats_payload: Dict[str, Any]) -> str:
-        endpoint = f"{self.base_url}/api/v1/partners/clients/{self.external_id}/search"
+        endpoint = f"{self.base_url}/api/v1/matches"
         
         vacancy = ats_payload.get("vacancy", {})
         job_title = vacancy.get("title", "")
         description = vacancy.get("description", "")
         
+        remote = vacancy.get("remote", "")
         address_dict = vacancy.get("address") or {}
-        location = address_dict.get("locality", "")
         
         try:
             salary_min = int(vacancy.get("salary", 0))
@@ -41,19 +41,20 @@ class JemmoClient:
             
         payload = {
             "query": "-",
-            "job_id": vacancy_slug,
             "criteria": {
                 "jobTitle": job_title,
                 "description": description,
-                "location": location,
                 "pricing": {
                     "min": salary_min,
                     "max": salary_max
                 }
             }
         }
+        if remote in ("notime"):
+            payload["criteria"]["location"] = address_dict.get("locality", "")
         
         logger.info(f"[Jemmo] Creating search for job {vacancy_slug}...")
+        logger.info(f"[Jemmo] Payload: {payload}")
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(endpoint, json=payload, headers=self.headers, timeout=10.0)
@@ -70,7 +71,7 @@ class JemmoClient:
                 raise
 
     async def get_match_results(self, match_id: str) -> List[Dict[str, Any]]:
-        endpoint = f"{self.base_url}/api/v1/partners/clients/{self.external_id}/matches/{match_id}"
+        endpoint = f"{self.base_url}/api/v1/matches/{match_id}?include_details=true"
         logger.info(f"[Jemmo] Fetching match results for matchId {match_id}...")
         async with httpx.AsyncClient() as client:
             try:

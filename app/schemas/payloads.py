@@ -22,11 +22,16 @@ class AtsJobCreatedPayload(BaseModel):
 
 # --- Nouveaux modèles pour le Sourcing (Flux 2) ---
 
+class SourcingMatchData(BaseModel):
+    job_id: str
+    match_id: str
+    model_config = ConfigDict(extra='allow')
+
 class SourcingMatchCompletedPayload(BaseModel):
     """
     Validation du payload venant de Jemmo lors du déclenchement du webhook de complétion de match.
     """
     event: str # devrait être "match.completed" ou similaire
-    matchId: str
-    externalJobId: str # Le vacancy_slug Flatchr
+    data: SourcingMatchData
+    timestamp: Optional[str] = None
     model_config = ConfigDict(extra='allow')
