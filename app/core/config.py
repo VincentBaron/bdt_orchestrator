@@ -1,6 +1,9 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
+    # Environment Check
+    ENVIRONMENT: str = "dev"
+    
     # Webhooks Global Security
     WEBHOOK_SECRET_PATH: str
     

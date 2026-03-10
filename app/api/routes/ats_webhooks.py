@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, BackgroundTasks, status, Request
 from app.api.dependencies import verify_secret_path
 from app.schemas.payloads import AtsJobCreatedPayload
 from app.services.ats_service import AtsService
+from app.core.config import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -29,6 +30,16 @@ async def ats_job_created_webhook(
     vacancy_slug = payload.vacancy.slug
     job_title = payload.vacancy.title or "Titre non fourni"
     
+    is_test_slug = vacancy_slug.endswith("-test")
+    
+    if settings.ENVIRONMENT == "dev" and not is_test_slug:
+        logger.warning(f"[Webhook ATS] DEV MODE: ignoring prod webhook for slug {vacancy_slug}")
+        return {"message": "prod request non traitée en dev"}
+        
+    if settings.ENVIRONMENT != "dev" and is_test_slug:
+        logger.warning(f"[Webhook ATS] PROD MODE: ignoring test webhook for slug {vacancy_slug}")
+        return {"message": "test request non traitée en prod"}
+        
     logger.info(f"[Webhook ATS] Extracted job_id: {job_id}, slug: {vacancy_slug}")
     
     # Déclenchement de la recherche via le Service ATS
@@ -57,9 +68,19 @@ async def ats_events_webhook(
         event_type = payload_dict.get("event")
         if event_type == "match.completed":
             data = payload_dict.get("data", {})
-            job_id = data.get("job_id")
-            match_id = data.get("match_id")
+            job_id = data.get("job_id", "")
+            match_id = data.get("match_id", "")
             
+            is_test_slug = job_id.endswith("-test")
+            
+            if settings.ENVIRONMENT == "dev" and not is_test_slug:
+                logger.warning(f"[Webhook ATS] DEV MODE: ignoring prod webhook for job_id {job_id}")
+                return {"message": "prod request non traitée en dev"}
+                
+            if settings.ENVIRONMENT != "dev" and is_test_slug:
+                logger.warning(f"[Webhook ATS] PROD MODE: ignoring test webhook for job_id {job_id}")
+                return {"message": "test request non traitée en prod"}
+                
             logger.info(f"==== 🎯 DETECTED MATCH.COMPLETED EVENT ====")
             logger.info(f"Event: {event_type}")
             logger.info(f"Job ID (Vacancy Slug): {job_id}")

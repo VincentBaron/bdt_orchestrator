@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from typing import Dict, Any, Optional
 from app.core.config import settings
 from app.clients.flatchr_client import FlatchrClient
@@ -77,14 +78,28 @@ class SourcingService:
         debug_logger.info(f"--- Démarrage process pour match_id={match_id} ---")
         try:
             jemmo_client = JemmoClient()
-            results = await jemmo_client.get_match_results(match_id)
             
-            candidates = results.get("talents", [])
-            candidates_returned = len(candidates)
-            debug_logger.info(f"1. Talents ressortis du get matchResults (Jemmo) : {candidates_returned}")
+            max_retries = 3
+            retry_delay = 3
+            
+            for attempt in range(max_retries):
+                results = await jemmo_client.get_match_results(match_id)
+                candidates = results.get("talents", [])
+                candidates_returned = len(candidates)
+                debug_logger.info(f"Tentative {attempt+1}/{max_retries} - Talents ressortis : {candidates_returned}")
+                
+                if candidates_returned > 0:
+                    break
+                    
+                if attempt < max_retries - 1:
+                    logger.info(f"[Background Sourcing] Aucun candidat retourné (tentative {attempt+1}/{max_retries}). Attente de {retry_delay}s avant de réessayer...")
+                    debug_logger.info(f"0 candidat à la tentative {attempt+1}, retry dans {retry_delay}s")
+                    await asyncio.sleep(retry_delay)
+            
+            debug_logger.info(f"1. Talents finaux ressortis du get matchResults (Jemmo) : {candidates_returned}")
             
             if not candidates:
-                logger.info(f"[Background Sourcing] Aucun candidat retourné pour le match {match_id}")
+                logger.info(f"[Background Sourcing] Aucun candidat retourné pour le match {match_id} après {max_retries} tentatives.")
                 debug_logger.info("Fin du process : 0 candidat")
                 return
                 
@@ -93,7 +108,8 @@ class SourcingService:
             api_calls = 0
             candidates_created = 0
             
-            for candidate in candidates:
+            # Inverser l'ordre (du plus bas au plus haut) pour qu'ils s'empilent avec les meilleurs en haut dans Flatchr
+            for candidate in reversed(candidates):
                 api_calls += 1
                 success = await SourcingService.process_new_sourced_candidate(
                     candidate_data=candidate,

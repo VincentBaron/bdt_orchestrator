@@ -15,3 +15,5 @@ test.json
 /test
 .agent/*
 setup_fly_secrets.sh
+.jemmo_hook_id.txt
+.flatchr_hook_id.txt
